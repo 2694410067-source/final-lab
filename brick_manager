@@ -1,0 +1,42 @@
+module brick_manager (
+    input clk,
+    input rst_n, // 统一为低电平复位
+    input level_start,
+    input [29:0] bricks_destroyed, // 30个砖块：1=已销毁，0=未销毁
+    output reg level_cleared,
+    output reg [5:0] bricks_remaining,
+    output reg [29:0] bricks_state // 输出当前砖块状态（用于渲染）
+);
+
+    parameter BRICKS_ROWS = 3; // 3层砖块
+    parameter BRICKS_COLS = 10; // 每层10个砖块
+    parameter MAX_BRICKS = 6'd30; // 总共30个砖块
+    
+    integer i;
+    reg [5:0] destroyed_count;
+
+    // 时序逻辑：更新砖块状态
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            bricks_state <= 30'h3FFFFFFF; // 初始所有砖块存在（30个1）
+        end else if (level_start) begin
+            bricks_state <= 30'h3FFFFFFF; // 重置所有砖块存在
+        end else begin
+            // 更新砖块状态
+            bricks_state <= ~bricks_destroyed; // 取反：1=存在，0=不存在
+        end
+    end
+    
+    // 组合逻辑：计算已销毁砖块数和关卡完成状态
+    always @(*) begin
+        destroyed_count = 6'd0;
+        for (i = 0; i < MAX_BRICKS; i = i + 1) begin
+            if (bricks_destroyed[i]) begin
+                destroyed_count = destroyed_count + 1'b1;
+            end
+        end
+        bricks_remaining = MAX_BRICKS - destroyed_count;
+        level_cleared = (bricks_remaining == 6'd0); // 剩余为0则关卡完成
+    end
+
+endmodule
