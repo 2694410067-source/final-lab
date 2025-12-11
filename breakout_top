@@ -1,0 +1,144 @@
+module breakout_top (
+    input wire clk_50m,
+    input wire rst_n,
+    input wire key_left,
+    input wire key_right,
+    input wire key_launch,
+    output wire vga_hsync,
+    output wire vga_vsync,
+    output wire [15:0] vga_rgb
+);
+
+    // 时钟域（从clock_manager输出）
+    wire clk_25m, clk_game, clk_debounce;
+    
+    // 游戏状态机信号（breakout_fsm接口）
+    wire [2:0] game_state;
+    wire level_reset, ball_reset;
+    
+    // 游戏对象信号
+    wire signed [15:0] ball_x, ball_y;
+    wire [15:0] paddle_x;       // paddle_controller输出15位
+    wire ball_hit_bottom;       // breakout_ball的ball_out信号
+    wire [29:0] bricks_destroyed;// breakout_ball输出，30位
+    wire [29:0] bricks_state;   // brick_manager输出，30个砖块状态
+    wire all_bricks_cleared;    // brick_manager输出，关卡完成信号
+    
+    // VGA相关信号
+    wire [9:0] pix_x, pix_y;    // vga_controller输出的像素坐标
+    wire video_on;              // vga_controller输出，视频有效信号
+    wire any_key_pressed;       // key_detector输出，任一按键按下
+    wire launch_ball_pressed;   // key_detector输出，launch_ball按键（消抖后）
+    wire [15:0] vga_rgb_internal; // enhanced_vga_renderer输出16位RGB
+    
+    // VGA控制器内部信号（vga_controller接口）
+    wire hsync, vsync;
+    wire h_end, v_end, pix_data_req;
+    wire [23:0] vga_ctrl_rgb;   // vga_controller输出24位RGB（未使用，直接用渲染器16位输出）
+
+    // 1. 时钟管理模块（生成25MHz VGA时钟、游戏逻辑时钟、消抖时钟）
+    clock_manager clk_mgr (
+        .clk_50m(clk_50m),
+        .rst_n(rst_n),
+        .clk_25m(clk_25m),
+        .clk_game(clk_game),
+        .clk_debounce(clk_debounce)
+    );
+    
+    // 2. 按键检测模块（带消抖，需传入消抖时钟）
+    key_detector key_det (
+        .clk(clk_game),           // 主时钟（消抖逻辑内部用clk_debounce）
+        .rst_n(rst_n),
+        .clk_debounce(clk_debounce), // 新增：传入消抖时钟（适配优化后的key_detector）
+        .move_left(key_left),
+        .move_right(key_right),
+        .launch_ball(key_launch),
+        .any_key_pressed(any_key_pressed),
+        .launch_ball_pressed(launch_ball_pressed) // 输出消抖后的launch_ball信号
+    );
+    
+    // 3. 游戏状态机模块（核心状态控制）
+    breakout_fsm fsm (
+        .clk(clk_game),
+        .rst_n(rst_n),
+        .launch_ball_pressed(launch_ball_pressed),  // 使用launch_ball按键，而不是任意按键
+        .ball_hit_bottom(ball_hit_bottom),
+        .all_bricks_cleared(all_bricks_cleared),
+        .game_state(game_state),
+        .level_reset(level_reset),
+        .ball_reset(ball_reset)
+    );
+    
+    // 4. 挡板控制模块（带消抖，需传入消抖时钟）
+    paddle_controller paddle (
+        .clk(clk_game),
+        .rst_n(rst_n),
+        .clk_debounce(clk_debounce), // 新增：传入消抖时钟（适配优化后的paddle_controller）
+        .key_left(key_left),
+        .key_right(key_right),
+        .game_state(game_state),
+        .paddle_x(paddle_x)
+    );
+    
+    // 5. 砖块管理模块（复位端口改为rst_n，适配优化后的brick_manager）
+    brick_manager bricks (
+        .clk(clk_game),
+        .rst_n(rst_n && !level_reset), // 低电平复位：rst_n=0 或 level_reset=1 时复位
+        .level_start(level_reset),     // 关卡开始信号（level_reset高电平触发）
+        .bricks_destroyed(bricks_destroyed),
+        .level_cleared(all_bricks_cleared), // level_cleared作为all_bricks_cleared（关卡完成）
+        .bricks_remaining(),           // 未使用的输出悬空
+        .bricks_state(bricks_state)    // 输出砖块状态用于渲染
+    );
+    
+    // 6. 球物理模块（复位端口改为rst_n，适配优化后的breakout_ball）
+    breakout_ball ball (
+        .clk(clk_game),
+        .rst_n(rst_n && ball_reset), // 低电平复位：ball_reset=0时复位球（rst_n=0），ball_reset=1时正常运行（rst_n=1）
+        .game_state(game_state),      // 传入游戏状态，只在STATE_PLAYING时移动
+        .paddle_x(paddle_x),
+        .bricks(bricks_state),         // 使用brick_manager输出的砖块状态
+        .ball_x(ball_x),
+        .ball_y(ball_y),
+        .ball_out(ball_hit_bottom),   // ball_out直接作为ball_hit_bottom（球出界=击中底部）
+        .bricks_destroyed(bricks_destroyed),
+        .collision_detected()         // 未使用的输出悬空
+    );
+    
+    // 7. VGA控制器模块（生成同步信号和像素坐标）
+    vga_controller vga_ctrl (
+        .vga_clk(clk_25m),
+        .sys_rst_n(rst_n),
+        .pix_data({vga_rgb_internal[15:11], 3'b000, vga_rgb_internal[10:5], 2'b00, vga_rgb_internal[4:0], 3'b000}), // 16位RGB565转24位RGB888
+        .pix_x(pix_x),
+        .pix_y(pix_y),
+        .hsync(hsync),
+        .vsync(vsync),
+        .video_on(video_on),
+        .vga_rgb(vga_ctrl_rgb),        // 24位RGB输出（未使用）
+        .h_end(h_end),
+        .v_end(v_end),
+        .pix_data_req(pix_data_req)
+    );
+    
+    // 8. VGA渲染器模块（生成16位RGB像素数据）
+    enhanced_vga_renderer renderer (
+        .clk_25m(clk_25m),
+        .rst_n(rst_n),
+        .game_state(game_state),
+        .vga_x(pix_x),
+        .vga_y(pix_y),
+        .video_on(video_on),
+        .ball_x(ball_x),
+        .ball_y(ball_y),
+        .paddle_x(paddle_x[9:0]),      // 15位paddle_x截断为10位（屏幕宽度640，10位足够）
+        .bricks_state(bricks_state),   // 传入砖块状态用于渲染
+        .vga_rgb(vga_rgb_internal)
+    );
+    
+    // 顶层输出分配
+    assign vga_hsync = hsync;
+    assign vga_vsync = vsync;
+    assign vga_rgb = vga_rgb_internal; // 直接输出渲染器的16位RGB565数据
+
+endmodule
