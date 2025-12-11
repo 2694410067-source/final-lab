@@ -1,0 +1,271 @@
+module press_key1_text_display (
+    input wire [9:0] x,
+    input wire [9:0] y,
+    output reg text_pixel
+);
+
+    // 内部信号：每个字符的像素输出
+    // 所有字符显示在一行，字符间距统一为4像素（8像素字符宽度+4像素间距=12像素）
+    wire char_start_pixel,char_p_pixel, char_r_pixel, char_e_pixel, char_s_pixel, char_s2_pixel;
+    wire space1_pixel;
+    wire char_k_pixel, char_e2_pixel, char_y_pixel, char_1_pixel;
+    wire space2_pixel;
+    wire char_t_pixel, char_o_pixel;
+    wire space3_pixel;
+    wire char_e3_pixel, char_n_pixel, char_t2_pixel, char_e4_pixel, char_r2_pixel;
+    wire space4_pixel;
+    wire char_t3_pixel, char_h_pixel, char_e5_pixel;
+    wire space5_pixel;
+    wire char_g_pixel, char_a_pixel, char_m_pixel, char_e6_pixel;
+    
+    // 所有字符显示在同一行，放在屏幕右下角（640x480）
+    // 文字总宽度：28个字符 * 12像素（8像素字符+4像素间距）= 336像素
+    // x坐标：640 - 336 = 304（从304开始）
+    // y坐标：480 - 8 - 10 = 462（距离底部10像素）
+    // "press key1 to enter the game"
+    // P R E S S [space] K E Y 1 [space] T O [space] E N T E R [space] T H E [space] G A M E
+    
+	 char_display char_start (
+        .x(x), .y(y),
+        .start_x(10'd292),  // P (右下角起始位置)
+        .start_y(10'd462),  // (距离底部10像素)
+        .char_code(8'h20),
+        .pixel_on(char_start_pixel)
+    );
+	 
+	 
+    char_display char_p (
+        .x(x), .y(y),
+        .start_x(10'd304),  // P (右下角起始位置)
+        .start_y(10'd462),  // (距离底部10像素)
+        .char_code(8'h50),
+        .pixel_on(char_p_pixel)
+    );
+    
+    char_display char_r (
+        .x(x), .y(y),
+        .start_x(10'd316),  // 304+8+4=316
+        .start_y(10'd462),
+        .char_code(8'h52),
+        .pixel_on(char_r_pixel)
+    );
+    
+    char_display char_e (
+        .x(x), .y(y),
+        .start_x(10'd328),  // 316+8+4=328
+        .start_y(10'd462),
+        .char_code(8'h45),
+        .pixel_on(char_e_pixel)
+    );
+    
+    char_display char_s (
+        .x(x), .y(y),
+        .start_x(10'd340),  // 328+8+4=340
+        .start_y(10'd462),
+        .char_code(8'h53),
+        .pixel_on(char_s_pixel)
+    );
+    
+    char_display char_s2 (
+        .x(x), .y(y),
+        .start_x(10'd352),  // 340+8+4=352
+        .start_y(10'd462),
+        .char_code(8'h53),
+        .pixel_on(char_s2_pixel)
+    );
+    
+    char_display space1_inst (
+        .x(x), .y(y),
+        .start_x(10'd364),  // 352+8+4=364
+        .start_y(10'd462),
+        .char_code(8'h00),
+        .pixel_on(space1_pixel)
+    );
+    
+    char_display char_k (
+        .x(x), .y(y),
+        .start_x(10'd376),  // 364+8+4=376
+        .start_y(10'd462),
+        .char_code(8'h4B),
+        .pixel_on(char_k_pixel)
+    );
+    
+    char_display char_e2 (
+        .x(x), .y(y),
+        .start_x(10'd388),  // 376+8+4=388
+        .start_y(10'd462),
+        .char_code(8'h45),
+        .pixel_on(char_e2_pixel)
+    );
+    
+    char_display char_y (
+        .x(x), .y(y),
+        .start_x(10'd400),  // 388+8+4=400
+        .start_y(10'd462),
+        .char_code(8'h59),
+        .pixel_on(char_y_pixel)
+    );
+    
+    char_display char_1 (
+        .x(x), .y(y),
+        .start_x(10'd412),  // 400+8+4=412
+        .start_y(10'd462),
+        .char_code(8'h31),
+        .pixel_on(char_1_pixel)
+    );
+    
+    char_display space2_inst (
+        .x(x), .y(y),
+        .start_x(10'd424),  // 412+8+4=424
+        .start_y(10'd462),
+        .char_code(8'h00),
+        .pixel_on(space2_pixel)
+    );
+    
+    char_display char_t (
+        .x(x), .y(y),
+        .start_x(10'd436),  // 424+8+4=436
+        .start_y(10'd462),
+        .char_code(8'h54),
+        .pixel_on(char_t_pixel)
+    );
+    
+    char_display char_o (
+        .x(x), .y(y),
+        .start_x(10'd448),  // 436+8+4=448
+        .start_y(10'd462),
+        .char_code(8'h4F),
+        .pixel_on(char_o_pixel)
+    );
+    
+    char_display space3_inst (
+        .x(x), .y(y),
+        .start_x(10'd460),  // 448+8+4=460
+        .start_y(10'd462),
+        .char_code(8'h00),
+        .pixel_on(space3_pixel)
+    );
+    
+    char_display char_e3 (
+        .x(x), .y(y),
+        .start_x(10'd472),  // 460+8+4=472
+        .start_y(10'd462),
+        .char_code(8'h45),
+        .pixel_on(char_e3_pixel)
+    );
+    
+    char_display char_n (
+        .x(x), .y(y),
+        .start_x(10'd484),  // 472+8+4=484
+        .start_y(10'd462),
+        .char_code(8'h4E),
+        .pixel_on(char_n_pixel)
+    );
+    
+    char_display char_t2 (
+        .x(x), .y(y),
+        .start_x(10'd496),  // 484+8+4=496
+        .start_y(10'd462),
+        .char_code(8'h54),
+        .pixel_on(char_t2_pixel)
+    );
+    
+    char_display char_e4 (
+        .x(x), .y(y),
+        .start_x(10'd508),  // 496+8+4=508
+        .start_y(10'd462),
+        .char_code(8'h45),
+        .pixel_on(char_e4_pixel)
+    );
+    
+    char_display char_r2 (
+        .x(x), .y(y),
+        .start_x(10'd520),  // 508+8+4=520
+        .start_y(10'd462),
+        .char_code(8'h52),
+        .pixel_on(char_r2_pixel)
+    );
+    
+    char_display space4_inst (
+        .x(x), .y(y),
+        .start_x(10'd532),  // 520+8+4=532
+        .start_y(10'd462),
+        .char_code(8'h00),
+        .pixel_on(space4_pixel)
+    );
+    
+    char_display char_t3 (
+        .x(x), .y(y),
+        .start_x(10'd544),  // 532+8+4=544
+        .start_y(10'd462),
+        .char_code(8'h54),
+        .pixel_on(char_t3_pixel)
+    );
+    
+    char_display char_h (
+        .x(x), .y(y),
+        .start_x(10'd556),  // 544+8+4=556
+        .start_y(10'd462),
+        .char_code(8'h48),
+        .pixel_on(char_h_pixel)
+    );
+    
+    char_display char_e5 (
+        .x(x), .y(y),
+        .start_x(10'd568),  // 556+8+4=568
+        .start_y(10'd462),
+        .char_code(8'h45),
+        .pixel_on(char_e5_pixel)
+    );
+    
+    char_display space5_inst (
+        .x(x), .y(y),
+        .start_x(10'd580),  // 568+8+4=580
+        .start_y(10'd462),
+        .char_code(8'h00),
+        .pixel_on(space5_pixel)
+    );
+    
+    char_display char_g (
+        .x(x), .y(y),
+        .start_x(10'd592),  // 580+8+4=592
+        .start_y(10'd462),
+        .char_code(8'h47),
+        .pixel_on(char_g_pixel)
+    );
+    
+    char_display char_a (
+        .x(x), .y(y),
+        .start_x(10'd604),  // 592+8+4=604
+        .start_y(10'd462),
+        .char_code(8'h41),
+        .pixel_on(char_a_pixel)
+    );
+    
+    char_display char_m (
+        .x(x), .y(y),
+        .start_x(10'd616),  // 604+8+4=616
+        .start_y(10'd462),
+        .char_code(8'h4D),
+        .pixel_on(char_m_pixel)
+    );
+    
+    char_display char_e6 (
+        .x(x), .y(y),
+        .start_x(10'd628),  // 616+8+4=628
+        .start_y(10'd462),
+        .char_code(8'h45),
+        .pixel_on(char_e6_pixel)
+    );
+    
+    // 合并所有字符的像素输出
+    always @(*) begin
+        text_pixel =char_start_pixel | char_p_pixel | char_r_pixel | char_e_pixel | char_s_pixel | char_s2_pixel | space1_pixel |
+                     char_k_pixel | char_e2_pixel | char_y_pixel | char_1_pixel | space2_pixel |
+                     char_t_pixel | char_o_pixel | space3_pixel |
+                     char_e3_pixel | char_n_pixel | char_t2_pixel | char_e4_pixel | char_r2_pixel | space4_pixel |
+                     char_t3_pixel | char_h_pixel | char_e5_pixel | space5_pixel |
+                     char_g_pixel | char_a_pixel | char_m_pixel | char_e6_pixel;
+    end
+
+endmodule
