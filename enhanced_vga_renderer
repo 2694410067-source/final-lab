@@ -1,0 +1,179 @@
+module enhanced_vga_renderer (
+    input wire clk_25m,
+    input wire rst_n,
+    input wire [2:0] game_state,
+    input wire [9:0] vga_x,
+    input wire [9:0] vga_y,
+    input wire video_on,
+    input wire signed [15:0] ball_x,
+    input wire signed [15:0] ball_y,
+    input wire [9:0] paddle_x,
+    input wire [29:0] bricks_state, // 30个砖块状态：1=存在，0=不存在
+    output reg [15:0] vga_rgb
+);
+
+    // 统一的颜色定义（24位RGB和16位RGB565）
+    localparam WHITE_24  = 24'hFFFFFF;
+    localparam BLACK_24  = 24'h000000;
+    localparam RED_24    = 24'hFF0000;
+    localparam GRAY_24   = 24'h808080;
+    localparam YELLOW_24 = 24'hFFFF00;
+    localparam BLUE_24   = 24'h0000FF; // 补充24位蓝色定义（可选，保持一致性）
+    
+    localparam WHITE  = 16'hFFFF;
+    localparam BLACK  = 16'h0000;
+    localparam RED    = 16'hF800;
+    localparam GRAY   = 16'h8410;
+    localparam YELLOW = 16'hFFE0;
+    localparam BLUE   = 16'h001F; // 核心修复：添加16位RGB565蓝色定义（B5位全1）
+    localparam PINK   = 16'hF83F; // 粉色边框：RGB565格式 (R=11111, G=00111, B=11111)
+    
+    // 引用breakout_fsm的状态编码（4个状态）
+    localparam STATE_START     = 3'b000; // 状态一：开始界面（BREAKOUT）
+    localparam STATE_PLAYING   = 3'b001; // 状态二：游戏状态
+    localparam STATE_GAME_OVER = 3'b010; // 状态三：游戏结束（GAMEOVER，小球落出）
+    localparam STATE_YOU_WIN   = 3'b011; // 状态四：胜利（YOU WIN，砖块全部清除）
+    
+    // 游戏对象参数
+    parameter BALL_SIZE = 10;
+    parameter PADDLE_WIDTH = 80;
+    parameter PADDLE_HEIGHT = 10;
+    parameter PADDLE_Y = 460;
+    
+    // 砖块参数
+    parameter BRICKS_ROWS = 3; // 3层砖块
+    parameter BRICKS_COLS = 10; // 每层10个砖块
+    parameter BRICK_W = 64;
+    parameter BRICK_H = 30;
+    parameter BRICK_START_Y = 50; // 第一层砖块的Y坐标
+    parameter BRICK_ROW_SPACING = 35; // 层间距
+    
+    wire breakout_text, gameover_text, press_key1_text, you_win_text;
+    
+    // 文字显示
+    breakout_text_display breakout_text_inst (
+        .x(vga_x), .y(vga_y), .text_pixel(breakout_text)
+    );
+    
+    gameover_text_display gameover_text_inst (
+        .x(vga_x), .y(vga_y), .text_pixel(gameover_text)
+    );
+    
+    press_key1_text_display press_key1_text_inst (
+        .x(vga_x), .y(vga_y), .text_pixel(press_key1_text)
+    );
+    
+    you_win_text_display you_win_text_inst (
+        .x(vga_x), .y(vga_y), .text_pixel(you_win_text)
+    );
+    
+    // 球显示检测（圆形显示）
+    // 计算球的中心坐标和半径
+    wire signed [15:0] ball_center_x, ball_center_y;
+    wire [15:0] ball_radius;
+    assign ball_center_x = ball_x + (BALL_SIZE >> 1);  // 球心X坐标 = ball_x + 5
+    assign ball_center_y = ball_y + (BALL_SIZE >> 1);  // 球心Y坐标 = ball_y + 5
+    assign ball_radius = BALL_SIZE >> 1;  // 半径 = BALL_SIZE/2 = 5
+    
+    // 计算当前像素到球心的距离差（有符号数）
+    wire signed [15:0] dx, dy;
+    assign dx = $signed({6'b0, vga_x}) - ball_center_x;
+    assign dy = $signed({6'b0, vga_y}) - ball_center_y;
+    
+    // 计算距离的平方（使用绝对值，避免有符号数乘法的复杂性）
+    wire [15:0] dx_abs, dy_abs;
+    assign dx_abs = (dx[15]) ? (-dx) : dx;  // 取绝对值
+    assign dy_abs = (dy[15]) ? (-dy) : dy;  // 取绝对值
+    
+    // 计算距离的平方（无符号数乘法）
+    wire [31:0] dx_squared, dy_squared, dist_squared;
+    wire [31:0] radius_squared;
+    assign dx_squared = dx_abs * dx_abs;
+    assign dy_squared = dy_abs * dy_abs;
+    assign dist_squared = dx_squared + dy_squared;
+    assign radius_squared = ball_radius * ball_radius;
+    
+    // 判断像素是否在圆内（距离的平方 <= 半径的平方）
+    wire ball_display;
+    assign ball_display = (ball_x >= 0 && ball_y >= 0) &&  // 确保球坐标有效
+                          (dist_squared <= radius_squared);  // 在圆内
+    
+    // 挡板显示检测
+    wire paddle_display;
+    assign paddle_display = (vga_x >= paddle_x && vga_x < paddle_x + PADDLE_WIDTH &&
+                            vga_y >= PADDLE_Y && vga_y < PADDLE_Y + PADDLE_HEIGHT);
+    
+    // 砖块显示检测（3层x10列）
+    reg brick_display;
+    reg brick_border;  // 砖块边框检测
+    integer brick_row, brick_col;
+    reg [4:0] brick_idx;
+    reg [15:0] brick_left, brick_right, brick_top, brick_bottom;
+    localparam BORDER_WIDTH = 1; // 边框宽度（像素）
+    
+    always @(*) begin
+        brick_display = 1'b0;
+        brick_border = 1'b0;
+        for (brick_row = 0; brick_row < BRICKS_ROWS; brick_row = brick_row + 1) begin
+            for (brick_col = 0; brick_col < BRICKS_COLS; brick_col = brick_col + 1) begin
+                brick_idx = brick_row * BRICKS_COLS + brick_col;
+                if (bricks_state[brick_idx]) begin // 砖块存在
+                    brick_left = brick_col * BRICK_W;
+                    brick_right = (brick_col + 1) * BRICK_W;
+                    brick_top = BRICK_START_Y + brick_row * BRICK_ROW_SPACING;
+                    brick_bottom = brick_top + BRICK_H;
+                    // 检测是否在砖块内部
+                    if (vga_x >= brick_left && vga_x < brick_right &&
+                        vga_y >= brick_top && vga_y < brick_bottom) begin
+                        brick_display = 1'b1;
+                        // 检测是否在边框上（左、右、上、下边缘）
+                        if ((vga_x >= brick_left && vga_x < brick_left + BORDER_WIDTH) ||  // 左边框
+                            (vga_x >= brick_right - BORDER_WIDTH && vga_x < brick_right) || // 右边框
+                            (vga_y >= brick_top && vga_y < brick_top + BORDER_WIDTH) ||     // 上边框
+                            (vga_y >= brick_bottom - BORDER_WIDTH && vga_y < brick_bottom)) begin // 下边框
+                            brick_border = 1'b1;
+                        end
+                    end
+                end
+            end
+        end
+    end
+    
+    // 主渲染逻辑
+    always @(posedge clk_25m or negedge rst_n) begin
+        if (!rst_n) begin
+            vga_rgb <= BLACK;
+        end else if (video_on) begin
+            case (game_state)
+                STATE_START: begin
+                    // 状态一：黑底白字的"BREAKOUT"和"press key1 to enter the game"
+                    if (breakout_text || press_key1_text) begin
+                        vga_rgb = WHITE;
+                    end else begin
+                        vga_rgb = BLACK;
+                    end
+                end
+                STATE_PLAYING: begin
+                    // 状态二：游戏状态
+                    if (brick_border) vga_rgb = BLACK;  // 砖块边框为黑色
+                    else if (brick_display) vga_rgb = WHITE; // 砖块内部为白色
+                    else if (ball_display) vga_rgb = RED; // 球为红色
+                    else if (paddle_display) vga_rgb = WHITE; // 挡板为白色
+                    else vga_rgb = BLACK; // 游戏背景黑色
+                end
+                STATE_GAME_OVER: begin
+                    // 状态三：黑底白字的"GAMEOVER"
+                    vga_rgb = gameover_text ? WHITE : BLACK;
+                end
+                STATE_YOU_WIN: begin
+                    // 状态四：黑底白字的"YOU WIN"
+                    vga_rgb = you_win_text ? WHITE : BLACK;
+                end
+                default: vga_rgb = BLACK;
+            endcase
+        end else begin
+            vga_rgb <= BLACK;
+        end
+    end
+
+endmodule
