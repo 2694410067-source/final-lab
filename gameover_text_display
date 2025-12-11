@@ -1,0 +1,138 @@
+module gameover_text_display (
+    input wire [9:0] x,
+    input wire [9:0] y,
+    output reg text_pixel
+);
+
+    
+    
+    wire char_g_pixel, char_a_pixel, char_m_pixel, char_e_pixel, char_o_pixel, char_v_pixel, char_e2_pixel, char_r_pixel;
+    
+    // 判断当前像素属于哪个字符（每个字符16像素宽，间距40像素）
+    wire [9:0] char_offset;
+    assign char_offset = (x >= 10'd200) ? (x - 10'd200) : 10'd0;
+    
+    // 计算每个字符内的相对坐标（除以2得到原始字符坐标）
+    wire [9:0] char_local_x, char_local_y;
+    wire [2:0] char_idx;
+    
+    // 确定字符索引和局部坐标
+    // GAMEOVER: G(0-16) A(40-56) M(80-96) E(120-136) O(160-176) V(200-216) E(240-256) R(280-296)
+    assign char_idx = (char_offset < 16) ? 3'd0 :        // G (0-16)
+                     (char_offset < 56) ? 3'd1 :         // A (40-56)
+                     (char_offset < 96) ? 3'd2 :          // M (80-96)
+                     (char_offset < 136) ? 3'd3 :         // E (120-136)
+                     (char_offset < 176) ? 3'd4 :         // O (160-176)
+                     (char_offset < 216) ? 3'd5 :          // V (200-216)
+                     (char_offset < 256) ? 3'd6 :          // E (240-256)
+                     3'd7;                                 // R (280-296)
+    
+    // 计算字符内的局部x坐标（相对于字符起始位置）
+    assign char_local_x = (char_idx == 3'd0) ? char_offset :
+                         (char_idx == 3'd1) ? (char_offset - 40) :
+                         (char_idx == 3'd2) ? (char_offset - 80) :
+                         (char_idx == 3'd3) ? (char_offset - 120) :
+                         (char_idx == 3'd4) ? (char_offset - 160) :
+                         (char_idx == 3'd5) ? (char_offset - 200) :
+                         (char_idx == 3'd6) ? (char_offset - 240) :
+                         (char_offset - 280);
+    
+    // 计算原始字符坐标（除以2实现2x2缩放）
+    assign char_local_y = (y >= 10'd200) ? ((y - 10'd200) >> 1) : 10'd0;
+    wire [9:0] orig_char_x;
+    assign orig_char_x = char_local_x >> 1;
+    
+    // 为每个字符获取像素（使用原始字符坐标）
+    char_display char_g (
+        .x(orig_char_x),
+        .y(char_local_y),
+        .start_x(10'd0),
+        .start_y(10'd0),
+        .char_code(8'h47),  // "G"
+        .pixel_on(char_g_pixel)
+    );
+    
+    char_display char_a (
+        .x(orig_char_x),
+        .y(char_local_y),
+        .start_x(10'd0),
+        .start_y(10'd0),
+        .char_code(8'h41),  // "A"
+        .pixel_on(char_a_pixel)
+    );
+    
+    char_display char_m (
+        .x(orig_char_x),
+        .y(char_local_y),
+        .start_x(10'd0),
+        .start_y(10'd0),
+        .char_code(8'h4D),  // "M"
+        .pixel_on(char_m_pixel)
+    );
+    
+    char_display char_e (
+        .x(orig_char_x),
+        .y(char_local_y),
+        .start_x(10'd0),
+        .start_y(10'd0),
+        .char_code(8'h45),  // "E"
+        .pixel_on(char_e_pixel)
+    );
+    
+    char_display char_o (
+        .x(orig_char_x),
+        .y(char_local_y),
+        .start_x(10'd0),
+        .start_y(10'd0),
+        .char_code(8'h4F),  // "O"
+        .pixel_on(char_o_pixel)
+    );
+    
+    char_display char_v (
+        .x(orig_char_x),
+        .y(char_local_y),
+        .start_x(10'd0),
+        .start_y(10'd0),
+        .char_code(8'h56),  // "V"
+        .pixel_on(char_v_pixel)
+    );
+    
+    char_display char_e2 (
+        .x(orig_char_x),
+        .y(char_local_y),
+        .start_x(10'd0),
+        .start_y(10'd0),
+        .char_code(8'h45),  // "E"
+        .pixel_on(char_e2_pixel)
+    );
+    
+    char_display char_r (
+        .x(orig_char_x),
+        .y(char_local_y),
+        .start_x(10'd0),
+        .start_y(10'd0),
+        .char_code(8'h52),  // "R"
+        .pixel_on(char_r_pixel)
+    );
+    
+    // 选择当前字符的像素
+    wire selected_pixel;
+    assign selected_pixel = (char_idx == 3'd0) ? char_g_pixel :
+                           (char_idx == 3'd1) ? char_a_pixel :
+                           (char_idx == 3'd2) ? char_m_pixel :
+                           (char_idx == 3'd3) ? char_e_pixel :
+                           (char_idx == 3'd4) ? char_o_pixel :
+                           (char_idx == 3'd5) ? char_v_pixel :
+                           (char_idx == 3'd6) ? char_e2_pixel :
+                           char_r_pixel;
+    
+    always @(*) begin
+        
+        if (y >= 10'd200 && y < 10'd216 && x >= 10'd200 && x < 10'd496) begin
+            text_pixel = selected_pixel;
+        end else begin
+            text_pixel = 1'b0;
+        end
+    end
+
+endmodule
