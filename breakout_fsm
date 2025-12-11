@@ -1,0 +1,135 @@
+module breakout_fsm (
+    input wire clk,
+    input wire rst_n,
+    input wire launch_ball_pressed, // 改为使用launch_ball按键，而不是任意按键
+    input wire ball_hit_bottom,
+    input wire all_bricks_cleared,
+    output reg [2:0] game_state,
+    output reg level_reset,
+    output reg ball_reset
+);
+
+    // 状态定义（4个状态）
+    localparam STATE_START    = 3'b000; // 状态一：开始界面（BREAKOUT）
+    localparam STATE_PLAYING  = 3'b001; // 状态二：游戏状态
+    localparam STATE_GAME_OVER = 3'b010; // 状态三：游戏结束（GAMEOVER，小球落出）
+    localparam STATE_YOU_WIN  = 3'b011; // 状态四：胜利（YOU WIN，砖块全部清除）
+
+    reg [2:0] next_state;
+    reg launch_ball_pressed_prev; // 用于边沿检测（launch_ball按键）
+    reg [3:0] rst_counter; // 复位后稳定计数器（多个时钟周期）
+    reg state_locked; // 状态锁定标志，防止游戏过程中按键误触发
+    
+    // 状态寄存器
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            game_state <= STATE_START;
+            launch_ball_pressed_prev <= 1'b1; // 初始化为1，用于下降沿检测（按键未按下时为1）
+            rst_counter <= 4'd0;
+            state_locked <= 1'b0;
+        end else begin
+            // 复位后的多个时钟周期：强制保持在STATE_START，同步按键状态
+            if (rst_counter < 4'd10) begin
+                game_state <= STATE_START; // 强制保持在STATE_START
+                rst_counter <= rst_counter + 1'b1;
+                // 持续同步按键状态，确保稳定
+                launch_ball_pressed_prev <= launch_ball_pressed;
+                state_locked <= 1'b0; // 开始界面不锁定
+            end else begin
+                game_state <= next_state;
+                // 更新按键前一个状态，用于边沿检测
+                launch_ball_pressed_prev <= launch_ball_pressed;
+                // 状态锁定逻辑：进入游戏状态后锁定，游戏结束后解锁
+                if (next_state == STATE_PLAYING) begin
+                    state_locked <= 1'b1; // 进入游戏状态时锁定
+                end else if (next_state == STATE_GAME_OVER || next_state == STATE_YOU_WIN) begin
+                    state_locked <= 1'b0; // 游戏结束或胜利后解锁（可以重新开始）
+                end else if (next_state == STATE_START) begin
+                    state_locked <= 1'b0; // 回到开始界面时解锁
+                end
+            end
+        end
+    end
+    
+    // 控制信号生成
+    always @(*) begin
+        level_reset = 1'b0;
+        ball_reset = 1'b0;
+        
+        case (game_state)
+            STATE_START: begin
+                // 状态一：开始界面，重置关卡和球
+                // 注意：level_reset=1时，brick_manager会复位，但不会触发游戏开始
+                // ball_reset=0时，breakout_ball会复位（rst_n=0），确保球在初始位置
+                level_reset = 1'b1; // 重置砖块状态
+                ball_reset = 1'b0;  // 复位球（ball_reset=0时，breakout_ball的rst_n=0，球被复位）
+            end
+            STATE_PLAYING: begin
+                // 状态二：游戏状态，正常运行
+                level_reset = 1'b0; // 不再重置关卡
+                ball_reset = 1'b1;  // 球正常运行（ball_reset=1时，breakout_ball的rst_n=1，球可以移动）
+            end
+            STATE_GAME_OVER: begin
+                // 状态三：游戏结束，保持状态
+                level_reset = 1'b0;
+                ball_reset = 1'b0;  // 复位球
+            end
+            STATE_YOU_WIN: begin
+                // 状态四：胜利，保持状态
+                level_reset = 1'b0;
+                ball_reset = 1'b0;  // 复位球
+            end
+            default: begin
+                level_reset = 1'b0;
+                ball_reset = 1'b0;
+            end
+        endcase
+    end
+    
+    // 下一状态逻辑：使用 game_state+1 的方式转换
+    always @(*) begin
+        // 如果还在复位稳定期间，强制保持STATE_START
+        if (rst_counter < 4'd10) begin
+            next_state = STATE_START;
+        end else begin
+            next_state = game_state; // 默认保持当前状态
+            
+            case (game_state)
+                STATE_START: begin
+                    // 状态一：开始界面（BREAKOUT），按launch_ball键进入游戏状态
+                    // 使用下降沿检测：只在按键从高到低跳变时触发（1->0，按键按下），且状态未锁定时
+                    // 强制忽略ball_hit_bottom和all_bricks_cleared，防止误触发
+                    if (!state_locked && !launch_ball_pressed && launch_ball_pressed_prev) begin
+                        next_state = game_state + 1; // 进入状态二（STATE_PLAYING = 1）
+                    end else begin
+                        next_state = STATE_START; // 继续停留在开始界面
+                    end
+                end
+                STATE_PLAYING: begin
+                    // 状态二：游戏状态
+                    // 游戏过程中按键不会触发状态转换（通过state_locked保护）
+                    // 确保只在游戏状态（state_locked=1）时响应这些信号
+                    if (state_locked && all_bricks_cleared) begin
+                        next_state = STATE_YOU_WIN; // 砖块全部清除，进入胜利状态
+                    end else if (state_locked && ball_hit_bottom) begin
+                        next_state = STATE_GAME_OVER; // 小球落出，进入游戏结束状态
+                    end else begin
+                        next_state = STATE_PLAYING; // 继续游戏
+                    end
+                end
+                STATE_GAME_OVER: begin
+                    // 状态三：游戏结束，按reset按键重新进入开始界面
+                    // reset按键通过rst_n信号处理，这里保持状态
+                    next_state = STATE_GAME_OVER; // 保持不变，等待reset
+                end
+                STATE_YOU_WIN: begin
+                    // 状态四：胜利，按reset按键重新进入开始界面
+                    // reset按键通过rst_n信号处理，这里保持状态
+                    next_state = STATE_YOU_WIN; // 保持不变，等待reset
+                end
+                default: next_state = STATE_START;
+            endcase
+        end
+    end
+
+endmodule
