@@ -1,0 +1,121 @@
+module you_win_text_display (
+    input wire [9:0] x,
+    input wire [9:0] y,
+    output reg text_pixel
+);
+
+    // 加粗加大显示：每个字符显示为16x16像素（原始8x8的2倍），字符间距保持40像素不变
+    // 使用2x2缩放：每个原始像素显示为2x2像素块，实现加粗效果（与BREAKOUT一致）
+    
+    wire char_y_pixel, char_o_pixel, char_u_pixel;
+    wire char_w_pixel, char_i_pixel, char_n_pixel;
+    
+    // 判断当前像素属于哪个字符（每个字符16像素宽，间距40像素）
+    wire [9:0] char_offset;
+    assign char_offset = (x >= 10'd200) ? (x - 10'd200) : 10'd0;
+    
+    // 计算每个字符内的相对坐标（除以2得到原始字符坐标）
+    wire [9:0] char_local_x, char_local_y;
+    wire [2:0] char_idx;
+    
+    // 确定字符索引和局部坐标
+    // YOU WIN: Y(0-16) O(40-56) U(80-96) [space 120-160] W(160-176) I(200-216) N(240-256)
+    assign char_idx = (char_offset < 16) ? 3'd0 :        // Y (0-16)
+                     (char_offset < 56) ? 3'd1 :         // O (40-56)
+                     (char_offset < 96) ? 3'd2 :          // U (80-96)
+                     (char_offset >= 160 && char_offset < 176) ? 3'd3 :  // W (160-176)
+                     (char_offset >= 200 && char_offset < 216) ? 3'd4 :  // I (200-216)
+                     (char_offset >= 240 && char_offset < 256) ? 3'd5 :   // N (240-256)
+                     3'd6;                                 // 空格或其他位置（不显示）
+    
+    // 计算字符内的局部x坐标（相对于字符起始位置）
+    assign char_local_x = (char_idx == 3'd0) ? char_offset :
+                         (char_idx == 3'd1) ? (char_offset - 40) :
+                         (char_idx == 3'd2) ? (char_offset - 80) :
+                         (char_idx == 3'd3) ? (char_offset - 160) :
+                         (char_idx == 3'd4) ? (char_offset - 200) :
+                         (char_idx == 3'd5) ? (char_offset - 240) :
+                         10'd0;  // 空格或其他位置
+    
+    // 计算原始字符坐标（除以2实现2x2缩放）
+    assign char_local_y = (y >= 10'd200) ? ((y - 10'd200) >> 1) : 10'd0;
+    wire [9:0] orig_char_x;
+    assign orig_char_x = char_local_x >> 1;
+    
+    // 为每个字符获取像素（使用原始字符坐标）
+    char_display char_y (
+        .x(orig_char_x),
+        .y(char_local_y),
+        .start_x(10'd0),
+        .start_y(10'd0),
+        .char_code(8'h59),  // "Y"
+        .pixel_on(char_y_pixel)
+    );
+    
+    char_display char_o (
+        .x(orig_char_x),
+        .y(char_local_y),
+        .start_x(10'd0),
+        .start_y(10'd0),
+        .char_code(8'h4F),  // "O"
+        .pixel_on(char_o_pixel)
+    );
+    
+    char_display char_u (
+        .x(orig_char_x),
+        .y(char_local_y),
+        .start_x(10'd0),
+        .start_y(10'd0),
+        .char_code(8'h55),  // "U"
+        .pixel_on(char_u_pixel)
+    );
+    
+    char_display char_w (
+        .x(orig_char_x),
+        .y(char_local_y),
+        .start_x(10'd0),
+        .start_y(10'd0),
+        .char_code(8'h57),  // "W"
+        .pixel_on(char_w_pixel)
+    );
+    
+    char_display char_i (
+        .x(orig_char_x),
+        .y(char_local_y),
+        .start_x(10'd0),
+        .start_y(10'd0),
+        .char_code(8'h49),  // "I"
+        .pixel_on(char_i_pixel)
+    );
+    
+    char_display char_n (
+        .x(orig_char_x),
+        .y(char_local_y),
+        .start_x(10'd0),
+        .start_y(10'd0),
+        .char_code(8'h4E),  // "N"
+        .pixel_on(char_n_pixel)
+    );
+    
+    // 选择当前字符的像素
+    wire selected_pixel;
+    assign selected_pixel = (char_idx == 3'd0) ? char_y_pixel :
+                           (char_idx == 3'd1) ? char_o_pixel :
+                           (char_idx == 3'd2) ? char_u_pixel :
+                           (char_idx == 3'd3) ? char_w_pixel :
+                           (char_idx == 3'd4) ? char_i_pixel :
+                           (char_idx == 3'd5) ? char_n_pixel :
+                           1'b0;  // 空格或其他位置不显示
+    
+    always @(*) begin
+        // 2x2缩放显示，字符间距保持40像素不变（与BREAKOUT一致）
+        // 每个字符显示为16x16像素（y: 200-216）
+        // YOU WIN 总宽度：256像素（6个字符 + 1个空格 = 7个位置，最后一个字符N在240-256）
+        if (y >= 10'd200 && y < 10'd216 && x >= 10'd200 && x < 10'd456) begin
+            text_pixel = selected_pixel;
+        end else begin
+            text_pixel = 1'b0;
+        end
+    end
+
+endmodule
