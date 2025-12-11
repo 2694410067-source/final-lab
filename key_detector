@@ -1,0 +1,48 @@
+module key_detector (
+    input wire clk,
+    input wire rst_n,
+    input wire clk_debounce, // 消抖时钟
+    input wire move_left,
+    input wire move_right,
+    input wire launch_ball,
+    output reg any_key_pressed,
+    output reg launch_ball_pressed // 新增：消抖后的launch_ball信号
+);
+
+    // 消抖寄存器（需要5位以支持20ms消抖：1kHz时钟下20个周期=20ms）
+    reg [4:0] left_cnt, right_cnt, launch_cnt;
+    reg left_deb, right_deb, launch_deb;
+    
+    // 按键消抖（20ms消抖时间，覆盖机械按键抖动周期）
+    always @(posedge clk_debounce or negedge rst_n) begin
+        if (!rst_n) begin
+            left_cnt <= 5'd0;
+            right_cnt <= 5'd0;
+            launch_cnt <= 5'd0;
+            left_deb <= 1'b0;
+            right_deb <= 1'b0;
+            launch_deb <= 1'b0;
+        end else begin
+            // 消抖计数器：20个周期（20ms），确保稳定
+            left_cnt <= move_left ? 5'd20 : (left_cnt > 0 ? left_cnt - 1 : 0);
+            right_cnt <= move_right ? 5'd20 : (right_cnt > 0 ? right_cnt - 1 : 0);
+            launch_cnt <= launch_ball ? 5'd20 : (launch_cnt > 0 ? launch_cnt - 1 : 0);
+            
+            left_deb <= (left_cnt > 0);
+            right_deb <= (right_cnt > 0);
+            launch_deb <= (launch_cnt > 0);
+        end
+    end
+    
+    // 检测任一按键按下（消抖后）
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            any_key_pressed <= 1'b0;
+            launch_ball_pressed <= 1'b0;
+        end else begin
+            any_key_pressed <= left_deb || right_deb || launch_deb;
+            launch_ball_pressed <= launch_deb; // 输出消抖后的launch_ball信号
+        end
+    end
+
+endmodule
