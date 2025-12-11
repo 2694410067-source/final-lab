@@ -1,0 +1,249 @@
+module char_display (
+    input wire [9:0] x,
+    input wire [9:0] y,
+    input wire [9:0] start_x,    // 修正：统一使用10位
+    input wire [9:0] start_y,    // 修正：统一使用10位
+    input wire [7:0] char_code,
+    output reg pixel_on
+);
+    // 字符ROM - 简化版8x8字体
+    reg [7:0] char_rom [0:255][0:7]; // 扩展到256个字符
+    
+    // 初始化变量
+    integer i, j;
+    
+    // 初始化字符ROM
+    initial begin
+        // 初始化所有字符为0
+        for (i = 0; i < 256; i = i + 1) begin
+            for (j = 0; j < 8; j = j + 1) begin
+                char_rom[i][j] = 8'b0;
+            end
+        end
+        
+        // 'B' - BREAKOUT的B (ASCII 66)
+        char_rom[8'h42][0] = 8'b11110000;
+        char_rom[8'h42][1] = 8'b10001000;
+        char_rom[8'h42][2] = 8'b10001000;
+        char_rom[8'h42][3] = 8'b11110000;
+        char_rom[8'h42][4] = 8'b10001000;
+        char_rom[8'h42][5] = 8'b10001000;
+        char_rom[8'h42][6] = 8'b11110000;
+        char_rom[8'h42][7] = 8'b00000000;
+        
+        // 'R' (ASCII 82)
+        char_rom[8'h52][0] = 8'b11110000;
+        char_rom[8'h52][1] = 8'b10001000;
+        char_rom[8'h52][2] = 8'b10001000;
+        char_rom[8'h52][3] = 8'b11110000;
+        char_rom[8'h52][4] = 8'b10100000;
+        char_rom[8'h52][5] = 8'b10010000;
+        char_rom[8'h52][6] = 8'b10001000;
+        char_rom[8'h52][7] = 8'b00000000;
+        
+        // 'E' (ASCII 69)
+        char_rom[8'h45][0] = 8'b11111000;
+        char_rom[8'h45][1] = 8'b10000000;
+        char_rom[8'h45][2] = 8'b10000000;
+        char_rom[8'h45][3] = 8'b11110000;
+        char_rom[8'h45][4] = 8'b10000000;
+        char_rom[8'h45][5] = 8'b10000000;
+        char_rom[8'h45][6] = 8'b11111000;
+        char_rom[8'h45][7] = 8'b00000000;
+        
+        // 'A' (ASCII 65)
+        char_rom[8'h41][0] = 8'b00110000;
+        char_rom[8'h41][1] = 8'b01001000;
+        char_rom[8'h41][2] = 8'b10000100;
+        char_rom[8'h41][3] = 8'b10000100;
+        char_rom[8'h41][4] = 8'b11111100;
+        char_rom[8'h41][5] = 8'b10000100;
+        char_rom[8'h41][6] = 8'b10000100;
+        char_rom[8'h41][7] = 8'b00000000;
+        
+        // 'K' (ASCII 75)
+        char_rom[8'h4B][0] = 8'b10001000;
+        char_rom[8'h4B][1] = 8'b10010000;
+        char_rom[8'h4B][2] = 8'b10100000;
+        char_rom[8'h4B][3] = 8'b11000000;
+        char_rom[8'h4B][4] = 8'b10100000;
+        char_rom[8'h4B][5] = 8'b10010000;
+        char_rom[8'h4B][6] = 8'b10001000;
+        char_rom[8'h4B][7] = 8'b00000000;
+        
+        // 'O' (ASCII 79)
+        char_rom[8'h4F][0] = 8'b01111000;
+        char_rom[8'h4F][1] = 8'b10000100;
+        char_rom[8'h4F][2] = 8'b10000100;
+        char_rom[8'h4F][3] = 8'b10000100;
+        char_rom[8'h4F][4] = 8'b10000100;
+        char_rom[8'h4F][5] = 8'b10000100;
+        char_rom[8'h4F][6] = 8'b01111000;
+        char_rom[8'h4F][7] = 8'b00000000;
+        
+        // 'U' (ASCII 85)
+        char_rom[8'h55][0] = 8'b10000100;
+        char_rom[8'h55][1] = 8'b10000100;
+        char_rom[8'h55][2] = 8'b10000100;
+        char_rom[8'h55][3] = 8'b10000100;
+        char_rom[8'h55][4] = 8'b10000100;
+        char_rom[8'h55][5] = 8'b10000100;
+        char_rom[8'h55][6] = 8'b01111000;
+        char_rom[8'h55][7] = 8'b00000000;
+        
+        // 'T' (ASCII 84)
+        char_rom[8'h54][0] = 8'b11111100;
+        char_rom[8'h54][1] = 8'b00100000;
+        char_rom[8'h54][2] = 8'b00100000;
+        char_rom[8'h54][3] = 8'b00100000;
+        char_rom[8'h54][4] = 8'b00100000;
+        char_rom[8'h54][5] = 8'b00100000;
+        char_rom[8'h54][6] = 8'b00100000;
+        char_rom[8'h54][7] = 8'b00000000;
+        
+        // 'G' (ASCII 71)
+        char_rom[8'h47][0] = 8'b01111000;
+        char_rom[8'h47][1] = 8'b10000100;
+        char_rom[8'h47][2] = 8'b10000000;
+        char_rom[8'h47][3] = 8'b10011100;
+        char_rom[8'h47][4] = 8'b10000100;
+        char_rom[8'h47][5] = 8'b10000100;
+        char_rom[8'h47][6] = 8'b01111000;
+        char_rom[8'h47][7] = 8'b00000000;
+        
+        // 'M' (ASCII 77)
+        char_rom[8'h4D][0] = 8'b10000010;
+        char_rom[8'h4D][1] = 8'b11000110;
+        char_rom[8'h4D][2] = 8'b10101010;
+        char_rom[8'h4D][3] = 8'b10010010;
+        char_rom[8'h4D][4] = 8'b10000010;
+        char_rom[8'h4D][5] = 8'b10000010;
+        char_rom[8'h4D][6] = 8'b10000010;
+        char_rom[8'h4D][7] = 8'b00000000;
+        
+        // 'V' (ASCII 86)
+        char_rom[8'h56][0] = 8'b10000010;
+        char_rom[8'h56][1] = 8'b10000010;
+        char_rom[8'h56][2] = 8'b01000100;
+        char_rom[8'h56][3] = 8'b01000100;
+        char_rom[8'h56][4] = 8'b00101000;
+        char_rom[8'h56][5] = 8'b00101000;
+        char_rom[8'h56][6] = 8'b00010000;
+        char_rom[8'h56][7] = 8'b00000000;
+        
+        // 'P' (ASCII 80)
+        char_rom[8'h50][0] = 8'b11110000;
+        char_rom[8'h50][1] = 8'b10001000;
+        char_rom[8'h50][2] = 8'b10001000;
+        char_rom[8'h50][3] = 8'b11110000;
+        char_rom[8'h50][4] = 8'b10000000;
+        char_rom[8'h50][5] = 8'b10000000;
+        char_rom[8'h50][6] = 8'b10000000;
+        char_rom[8'h50][7] = 8'b00000000;
+        
+        // 'S' (ASCII 83)
+        char_rom[8'h53][0] = 8'b01111000;
+        char_rom[8'h53][1] = 8'b10000100;
+        char_rom[8'h53][2] = 8'b10000000;
+        char_rom[8'h53][3] = 8'b01111000;
+        char_rom[8'h53][4] = 8'b00000100;
+        char_rom[8'h53][5] = 8'b10000100;
+        char_rom[8'h53][6] = 8'b01111000;
+        char_rom[8'h53][7] = 8'b00000000;
+        
+        // 'Y' (ASCII 89)
+        char_rom[8'h59][0] = 8'b10000100;
+        char_rom[8'h59][1] = 8'b10000100;
+        char_rom[8'h59][2] = 8'b01001000;
+        char_rom[8'h59][3] = 8'b00110000;
+        char_rom[8'h59][4] = 8'b00100000;
+        char_rom[8'h59][5] = 8'b00100000;
+        char_rom[8'h59][6] = 8'b00100000;
+        char_rom[8'h59][7] = 8'b00000000;
+        
+        // '1' (ASCII 49)
+        char_rom[8'h31][0] = 8'b00100000;
+        char_rom[8'h31][1] = 8'b01100000;
+        char_rom[8'h31][2] = 8'b00100000;
+        char_rom[8'h31][3] = 8'b00100000;
+        char_rom[8'h31][4] = 8'b00100000;
+        char_rom[8'h31][5] = 8'b00100000;
+        char_rom[8'h31][6] = 8'b01110000;
+        char_rom[8'h31][7] = 8'b00000000;
+        
+        // 'N' (ASCII 78)
+        char_rom[8'h4E][0] = 8'b10000100;
+        char_rom[8'h4E][1] = 8'b11000100;
+        char_rom[8'h4E][2] = 8'b10100100;
+        char_rom[8'h4E][3] = 8'b10010100;
+        char_rom[8'h4E][4] = 8'b10001100;
+        char_rom[8'h4E][5] = 8'b10000100;
+        char_rom[8'h4E][6] = 8'b10000100;
+        char_rom[8'h4E][7] = 8'b00000000;
+        
+        // 'I' (ASCII 73)
+        char_rom[8'h49][0] = 8'b01110000;
+        char_rom[8'h49][1] = 8'b00100000;
+        char_rom[8'h49][2] = 8'b00100000;
+        char_rom[8'h49][3] = 8'b00100000;
+        char_rom[8'h49][4] = 8'b00100000;
+        char_rom[8'h49][5] = 8'b00100000;
+        char_rom[8'h49][6] = 8'b01110000;
+        char_rom[8'h49][7] = 8'b00000000;
+        
+        // 'H' (ASCII 72)
+        char_rom[8'h48][0] = 8'b10000100;
+        char_rom[8'h48][1] = 8'b10000100;
+        char_rom[8'h48][2] = 8'b10000100;
+        char_rom[8'h48][3] = 8'b11111100;
+        char_rom[8'h48][4] = 8'b10000100;
+        char_rom[8'h48][5] = 8'b10000100;
+        char_rom[8'h48][6] = 8'b10000100;
+        char_rom[8'h48][7] = 8'b00000000;
+        
+        // 'W' (ASCII 87)
+        char_rom[8'h57][0] = 8'b10000010;
+        char_rom[8'h57][1] = 8'b10000010;
+        char_rom[8'h57][2] = 8'b10000010;
+        char_rom[8'h57][3] = 8'b10010010;
+        char_rom[8'h57][4] = 8'b10101010;
+        char_rom[8'h57][5] = 8'b11000110;
+        char_rom[8'h57][6] = 8'b10000010;
+        char_rom[8'h57][7] = 8'b00000000;
+        
+        // 播放符号 (ASCII 32，重新定义为播放符号)
+        char_rom[8'h20][0] = 8'b10000000;
+        char_rom[8'h20][1] = 8'b11000000;
+        char_rom[8'h20][2] = 8'b11110000;
+        char_rom[8'h20][3] = 8'b11111000;
+        char_rom[8'h20][4] = 8'b11111100;
+        char_rom[8'h20][5] = 8'b11111000;
+        char_rom[8'h20][6] = 8'b11100000;
+        char_rom[8'h20][7] = 8'b10000000;
+        
+        // 真正的空格字符 (ASCII 0，用于文字中间的空格)
+        char_rom[8'h00][0] = 8'b00000000;
+        char_rom[8'h00][1] = 8'b00000000;
+        char_rom[8'h00][2] = 8'b00000000;
+        char_rom[8'h00][3] = 8'b00000000;
+        char_rom[8'h00][4] = 8'b00000000;
+        char_rom[8'h00][5] = 8'b00000000;
+        char_rom[8'h00][6] = 8'b00000000;
+        char_rom[8'h00][7] = 8'b00000000;
+    end
+    
+    wire [2:0] char_x;
+    wire [2:0] char_y;
+    
+    assign char_x = x - start_x;
+    assign char_y = y - start_y;
+    
+    always @(*) begin
+        if (x >= start_x && x < start_x + 8 && y >= start_y && y < start_y + 8) begin
+            pixel_on = char_rom[char_code][char_y][7 - char_x];
+        end else begin
+            pixel_on = 1'b0;
+        end
+    end
+
+endmodule
