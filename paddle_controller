@@ -1,0 +1,70 @@
+module paddle_controller (
+    input wire clk,
+    input wire rst_n,
+    input wire key_left,
+    input wire key_right,
+    input wire clk_debounce, // 消抖时钟（~1kHz）
+    input wire [2:0] game_state,
+    output reg [15:0] paddle_x
+);
+
+    parameter SCREEN_W = 640;
+    parameter PADDLE_W = 80;
+    parameter PADDLE_STEP = 26;
+    
+    localparam PADDLE_MIN = 0;
+    localparam PADDLE_MAX = SCREEN_W - PADDLE_W;
+    
+    // 状态定义（与breakout_fsm一致）
+    localparam STATE_PLAYING = 3'b001; // 状态二：游戏状态
+    
+    // 按键消抖寄存器
+    reg [2:0] key_left_cnt, key_right_cnt;
+    reg key_left_deb, key_right_deb;
+    reg key_left_prev, key_right_prev;
+    
+    // 按键消抖（clk_debounce下采样）
+    always @(posedge clk_debounce or negedge rst_n) begin
+        if (!rst_n) begin
+            key_left_cnt <= 3'd0;
+            key_right_cnt <= 3'd0;
+            key_left_deb <= 1'b0;
+            key_right_deb <= 1'b0;
+        end else begin
+            // 左按键消抖
+            if (key_left) key_left_cnt <= 3'd7;
+            else if (key_left_cnt > 3'd0) key_left_cnt <= key_left_cnt - 1'b1;
+            key_left_deb <= (key_left_cnt > 3'd0) ? 1'b1 : 1'b0;
+            
+            // 右按键消抖
+            if (key_right) key_right_cnt <= 3'd7;
+            else if (key_right_cnt > 3'd0) key_right_cnt <= key_right_cnt - 1'b1;
+            key_right_deb <= (key_right_cnt > 3'd0) ? 1'b1 : 1'b0;
+        end
+    end
+    
+    // 挡板位置控制
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            paddle_x <= (SCREEN_W - PADDLE_W) / 2;
+            key_left_prev <= 1'b0;
+            key_right_prev <= 1'b0;
+        end else if (game_state == STATE_PLAYING) begin
+            key_left_prev <= key_left_deb;
+            key_right_prev <= key_right_deb;
+            
+            // 左移（边沿检测）
+            if (key_left_deb && !key_left_prev && paddle_x > PADDLE_MIN) begin
+                paddle_x <= (paddle_x >= PADDLE_STEP) ? paddle_x - PADDLE_STEP : PADDLE_MIN;
+            end
+            // 右移（边沿检测）
+            else if (key_right_deb && !key_right_prev && paddle_x < PADDLE_MAX) begin
+                paddle_x <= (paddle_x <= PADDLE_MAX - PADDLE_STEP) ? paddle_x + PADDLE_STEP : PADDLE_MAX;
+            end
+        end else begin
+            // 非游戏状态时重置挡板位置
+            paddle_x <= (SCREEN_W - PADDLE_W) / 2;
+        end
+    end
+
+endmodule
