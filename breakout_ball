@@ -1,0 +1,155 @@
+module breakout_ball (
+    input clk,
+    input rst_n, 
+    input [2:0] game_state, 
+    input [15:0] paddle_x,
+    input [29:0] bricks, 
+    output reg signed [15:0] ball_x,
+    output reg signed [15:0] ball_y,
+    output reg ball_out,
+    output reg [29:0] bricks_destroyed, 
+    output reg collision_detected
+);
+    
+    
+    localparam STATE_PLAYING = 3'b001; 
+
+    parameter SCREEN_W = 640;
+    parameter SCREEN_H = 480;
+    parameter BALL_SIZE = 10;
+    
+    parameter PADDLE_Y = 460;
+    parameter PADDLE_W = 80;
+    parameter PADDLE_H = 10;
+    
+    parameter BRICKS_ROWS = 3; 
+    parameter BRICKS_COLS = 10; 
+    parameter BRICK_W = 64;
+    parameter BRICK_H = 30;
+    parameter BRICK_START_Y = 50; 
+    parameter BRICK_ROW_SPACING = 35; 
+    
+    parameter INIT_VX = 1;
+    parameter INIT_VY = -1;
+    
+    parameter INIT_BALL_X = 320;
+    parameter INIT_BALL_Y = 440;
+         
+    reg [15:0] ball_vx;
+    reg [15:0] ball_vy;
+    
+    integer i, row, col;
+    reg brick_collision;
+    
+    reg [15:0] next_ball_x;
+    reg [15:0] next_ball_y;
+    reg [15:0] brick_left;
+    reg [15:0] brick_right;
+    reg [15:0] brick_top;
+    reg [15:0] brick_bottom;
+    reg [4:0] brick_index; 
+
+    
+    reg [2:0] game_state_prev;
+    
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            ball_x <= INIT_BALL_X;
+            ball_y <= INIT_BALL_Y;
+            ball_vx <= INIT_VX;
+            ball_vy <= INIT_VY;
+            ball_out <= 1'b0;
+            collision_detected <= 1'b0;
+            bricks_destroyed <= 30'b0;
+            brick_collision <= 1'b0;
+            game_state_prev <= 3'b000;
+        end else begin
+            game_state_prev <= game_state;
+            
+            
+            if (game_state == STATE_PLAYING) begin
+               
+                if (game_state_prev != STATE_PLAYING) begin
+                    
+                    ball_vx <= INIT_VX;
+                    ball_vy <= INIT_VY;
+                    ball_x <= INIT_BALL_X;
+                    ball_y <= INIT_BALL_Y;
+                end
+                
+                collision_detected <= 1'b0;
+                brick_collision <= 1'b0;
+                
+                
+                next_ball_x = ball_x + ball_vx;
+                next_ball_y = ball_y + ball_vy;
+                
+                
+                if (next_ball_x <= 0 || next_ball_x >= SCREEN_W - BALL_SIZE) begin
+                    ball_vx <= -ball_vx;
+                    next_ball_x = (next_ball_x <= 0) ? 1 : SCREEN_W - BALL_SIZE - 1;
+                    collision_detected <= 1'b1;
+                end
+                if (next_ball_y <= 0) begin
+                    ball_vy <= -ball_vy;
+                    next_ball_y = 1;
+                    collision_detected <= 1'b1;
+                end
+                
+                
+                if (next_ball_y + BALL_SIZE >= PADDLE_Y && 
+                    next_ball_y < PADDLE_Y + PADDLE_H &&
+                    next_ball_x + BALL_SIZE >= paddle_x && 
+                    next_ball_x <= paddle_x + PADDLE_W) begin
+                    ball_vy <= -ball_vy;
+                    collision_detected <= 1'b1;
+                    
+                    if (next_ball_x < paddle_x + PADDLE_W/4) ball_vx <= ball_vx;
+                    else if (next_ball_x < paddle_x + PADDLE_W/2) ball_vx <= ball_vx;
+                    else if (next_ball_x < paddle_x + 3*PADDLE_W/4) ball_vx <= ball_vx;
+                    else ball_vx <= ball_vx;
+                end
+                
+                
+                for (row = 0; row < BRICKS_ROWS; row = row + 1) begin
+                    for (col = 0; col < BRICKS_COLS; col = col + 1) begin
+                        brick_index = row * BRICKS_COLS + col;
+                        if (bricks[brick_index] && !bricks_destroyed[brick_index]) begin
+                            brick_left = col * BRICK_W;
+                            brick_right = (col + 1) * BRICK_W;
+                            brick_top = BRICK_START_Y + row * BRICK_ROW_SPACING;
+                            brick_bottom = brick_top + BRICK_H;
+                            if (next_ball_x + BALL_SIZE >= brick_left &&
+                                next_ball_x <= brick_right &&
+                                next_ball_y + BALL_SIZE >= brick_top && 
+                                next_ball_y <= brick_bottom) begin
+                                bricks_destroyed[brick_index] <= 1'b1;
+                                brick_collision <= 1'b1;
+                                collision_detected <= 1'b1;
+                                ball_vy <= -ball_vy;
+                            end
+                        end
+                    end
+  end
+                
+               
+                ball_x <= next_ball_x;
+                ball_y <= next_ball_y;
+                
+                
+                if (next_ball_y + BALL_SIZE >= SCREEN_H) begin
+                    ball_out <= 1'b1; 
+                end else begin
+                    ball_out <= 1'b0;
+                end
+            end else begin
+                
+                collision_detected <= 1'b0;
+                brick_collision <= 1'b0;
+                ball_out <= 1'b0;
+                
+            end
+        end
+    end
+
+endmodule
