@@ -1,0 +1,47 @@
+module clock_manager (
+    input wire clk_50m,
+    input wire rst_n,
+    output wire clk_25m,        // VGA时钟
+    output reg clk_game,        // 游戏逻辑时钟
+    output reg clk_debounce     // 按键消抖时钟
+);
+
+    // 25MHz时钟分频 (50MHz -> 25MHz)
+    reg clk_25m_reg;
+    always @(posedge clk_50m or negedge rst_n) begin
+        if (!rst_n)
+            clk_25m_reg <= 1'b0;
+        else
+            clk_25m_reg <= ~clk_25m_reg;
+    end
+    assign clk_25m = clk_25m_reg;
+    
+    // 游戏逻辑时钟分频 (~60Hz)
+    reg [19:0] game_counter;
+    always @(posedge clk_50m or negedge rst_n) begin
+        if (!rst_n) begin
+            game_counter <= 20'd0;
+            clk_game <= 1'b0;
+        end else if (game_counter >= 20'd416666) begin
+            game_counter <= 20'd0;
+            clk_game <= ~clk_game;
+        end else begin
+            game_counter <= game_counter + 1'b1;
+        end
+    end
+    
+    // 消抖时钟分频 (~1kHz)
+    reg [15:0] debounce_counter;
+    always @(posedge clk_50m or negedge rst_n) begin
+        if (!rst_n) begin
+            debounce_counter <= 16'd0;
+            clk_debounce <= 1'b0;
+        end else if (debounce_counter >= 16'd25000) begin
+            debounce_counter <= 16'd0;
+            clk_debounce <= ~clk_debounce;
+        end else begin
+            debounce_counter <= debounce_counter + 1'b1;
+        end
+    end
+
+endmodule
