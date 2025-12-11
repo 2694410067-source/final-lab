@@ -1,0 +1,188 @@
+`timescale 1ns / 1ps
+
+module breakout_top_tb;
+
+    // 测试信号
+    reg clk_50m;
+    reg rst_n;
+    reg key_left;
+    reg key_right;
+    reg key_launch;
+    
+    // 输出信号
+    wire vga_hsync;
+    wire vga_vsync;
+    wire [15:0] vga_rgb;
+    
+    // 实例化被测模块
+    breakout_top uut (
+        .clk_50m(clk_50m),
+        .rst_n(rst_n),
+        .key_left(key_left),
+        .key_right(key_right),
+        .key_launch(key_launch),
+        .vga_hsync(vga_hsync),
+        .vga_vsync(vga_vsync),
+        .vga_rgb(vga_rgb)
+    );
+    
+    // 50MHz时钟生成（周期20ns）
+    initial begin
+        clk_50m = 0;
+        forever #10 clk_50m = ~clk_50m; // 10ns半周期
+    end
+    
+    // 测试序列
+    initial begin
+        // 初始化信号（根据引脚分配）
+        // clk_50m: PIN_E1 (50MHz时钟)
+        // key_launch: PIN_M2 (进入游戏状态)
+        // key_left: PIN_M1 (挡板左移)
+        // key_right: PIN_E15 (挡板右移)
+        // rst_n: PIN_M15 (复位信号，低电平有效)
+        rst_n = 0;
+        key_left = 0;
+        key_right = 0;
+        key_launch = 0;
+        
+        // 等待几个时钟周期
+        #100;
+        
+        // 释放复位
+        $display("========================================");
+        $display("时间 %0t ns: 释放复位信号 (rst_n = 1)", $time);
+        $display("========================================");
+        rst_n = 1;
+        
+        // 等待初始化延迟完成（状态机需要2000个时钟周期，约40us）
+        $display("时间 %0t ns: 等待初始化延迟完成...", $time);
+        #50000;  // 等待50us，确保初始化完成
+        
+        // 测试场景1: 开始界面（STATE_START_INIT），按key_launch进入游戏状态
+        $display("========================================");
+        $display("时间 %0t ns: 测试场景1 - 开始界面，按key_launch进入游戏状态", $time);
+        $display("当前状态: STATE_START_INIT (显示BREAKOUT界面)");
+        $display("按下 key_launch (PIN_M2)...");
+        key_launch = 1;  // 按下key_launch键
+        #20000;         // 保持按键20us
+        key_launch = 0;  // 释放按键
+        $display("释放 key_launch");
+        #100000;        // 等待状态转换完成（约100us）
+        $display("应该已进入游戏状态 (STATE_PLAYING)");
+        
+        // 测试场景2: 游戏状态中，挡板左移
+        $display("========================================");
+        $display("时间 %0t ns: 测试场景2 - 挡板左移", $time);
+        $display("按下 key_left (PIN_M1)...");
+        key_left = 1;
+        #1000000;       // 保持按键1ms
+        key_left = 0;
+        $display("释放 key_left");
+        #100000;
+        
+        // 测试场景3: 游戏状态中，挡板右移
+        $display("========================================");
+        $display("时间 %0t ns: 测试场景3 - 挡板右移", $time);
+        $display("按下 key_right (PIN_E15)...");
+        key_right = 1;
+        #1000000;       // 保持按键1ms
+        key_right = 0;
+        $display("释放 key_right");
+        #100000;
+        
+        // 测试场景4: 游戏状态中，连续移动挡板
+        $display("========================================");
+        $display("时间 %0t ns: 测试场景4 - 连续移动挡板", $time);
+        repeat(5) begin
+            $display("  左移...");
+            key_left = 1;
+            #200000;    // 200us
+            key_left = 0;
+            #100000;    // 100us
+            $display("  右移...");
+            key_right = 1;
+            #200000;    // 200us
+            key_right = 0;
+            #100000;    // 100us
+        end
+        
+        // 测试场景5: 长时间运行（模拟游戏过程，观察球和砖块）
+        $display("========================================");
+        $display("时间 %0t ns: 测试场景5 - 长时间运行（模拟游戏过程）", $time);
+        $display("观察球移动、碰撞检测、砖块消除等...");
+        #5000000;       // 运行5ms
+        
+        // 测试场景6: 测试重新开始（如果游戏结束，按key_launch重新开始）
+        $display("========================================");
+        $display("时间 %0t ns: 测试场景6 - 测试重新开始功能", $time);
+        $display("按下 key_launch 重新开始...");
+        key_launch = 1;
+        #20000;
+        key_launch = 0;
+        #100000;
+        
+        $display("========================================");
+        $display("时间 %0t ns: 所有测试场景完成", $time);
+        $display("========================================");
+        $finish;
+    end
+    
+    // 监控VGA信号（可选，注释掉以减少输出）
+    // initial begin
+    //     $monitor("时间 %0t: VGA_HSYNC=%b, VGA_VSYNC=%b, VGA_RGB=%h", 
+    //              $time, vga_hsync, vga_vsync, vga_rgb);
+    // end
+    
+    // VGA同步信号检测（根据引脚分配）
+    // vga_hsync: PIN_C2
+    // vga_vsync: PIN_D1
+    // vga_rgb[15:0]: 多个引脚在I/O Bank 8
+    reg prev_hsync, prev_vsync;
+    integer hsync_count = 0;
+    integer vsync_count = 0;
+    
+    always @(posedge clk_50m) begin
+        if (rst_n) begin
+            // 检测HSYNC上升沿 (PIN_C2)
+            if (!prev_hsync && vga_hsync) begin
+                hsync_count = hsync_count + 1;
+                if (hsync_count <= 10 || hsync_count % 1000 == 0) begin
+                    $display("时间 %0t ns: HSYNC (PIN_C2) 计数 = %0d", $time, hsync_count);
+                end
+            end
+            
+            // 检测VSYNC上升沿 (PIN_D1)
+            if (!prev_vsync && vga_vsync) begin
+                vsync_count = vsync_count + 1;
+                if (vsync_count <= 10 || vsync_count % 100 == 0) begin
+                    $display("时间 %0t ns: VSYNC (PIN_D1) 计数 = %0d (完成 %0d 帧)", $time, vsync_count, vsync_count);
+                end
+            end
+            
+            prev_hsync = vga_hsync;
+            prev_vsync = vga_vsync;
+        end
+    end
+    
+    // 生成VCD文件用于波形查看
+    initial begin
+        $dumpfile("breakout_top_tb.vcd");
+        $dumpvars(0, breakout_top_tb);
+    end
+    
+    // 设置仿真时间限制
+    initial begin
+        #20000000;  // 20ms仿真时间（足够完成所有测试场景）
+        $display("========================================");
+        $display("时间 %0t ns: 仿真时间限制到达 (20ms)", $time);
+        $display("========================================");
+        $finish;
+    end
+    
+    // 添加信号监控（可选，用于调试）
+    // initial begin
+    //     $monitor("时间 %0t ns: key_launch=%b, key_left=%b, key_right=%b, vga_hsync=%b, vga_vsync=%b", 
+    //              $time, key_launch, key_left, key_right, vga_hsync, vga_vsync);
+    // end
+
+endmodule
